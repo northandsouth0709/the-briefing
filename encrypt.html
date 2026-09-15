@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Briefing — encrypt / decrypt your notes</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --faint:#94a3b8; --line:#e6e8ee;
+    --bg:#f4f5f8; --card:#ffffff; --accent:#b91c1c; --ok:#047857;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--ink);line-height:1.5;padding:26px 16px 80px;}
+  .wrap{max-width:680px;margin:0 auto;}
+  h1{font-family:Georgia,serif;font-size:24px;letter-spacing:-0.02em;margin-bottom:4px;}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:22px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:16px;}
+  .card h2{font-size:15px;font-weight:700;margin-bottom:4px;}
+  .card .hint{color:var(--muted);font-size:13px;margin-bottom:14px;}
+  .step{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;
+        background:#eef2f7;color:var(--muted);font-size:12px;font-weight:700;margin-right:8px;}
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 5px;}
+  input,textarea{width:100%;border:1px solid var(--line);background:#f8fafc;border-radius:10px;
+        padding:10px 12px;font-family:inherit;font-size:14px;color:var(--ink);outline:none;}
+  input:focus,textarea:focus{border-color:#cbd5e1;}
+  textarea{resize:vertical;line-height:1.6;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}
+  .row>div{flex:1;min-width:130px;}
+  .btn{border:none;border-radius:999px;padding:10px 18px;font-family:inherit;font-size:14px;font-weight:600;
+        cursor:pointer;background:var(--ink);color:#fff;margin-top:14px;}
+  .btn.ghost{background:#eef2f7;color:var(--ink);}
+  .btn.accent{background:var(--accent);}
+  .btns{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .msg{font-size:13px;margin-top:10px;min-height:18px;}
+  .msg.ok{color:var(--ok);} .msg.err{color:var(--accent);}
+  .out{margin-top:14px;}
+  .out textarea{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;background:#0f172a;color:#e2e8f0;border-color:#0f172a;}
+  code{background:#eef2f7;border-radius:5px;padding:1px 6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;}
+  .count{font-size:12px;color:var(--faint);margin-top:6px;}
+  .numbered{margin-top:12px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;max-height:260px;overflow:auto;}
+  .numbered .nrow{display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid var(--line);font-size:13.5px;line-height:1.45;}
+  .numbered .nrow:last-child{border-bottom:none;}
+  .numbered .nnum{flex:none;min-width:26px;text-align:right;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums;}
+  .numbered .ntext{color:var(--ink);}
+  .numbered .nempty{padding:10px 12px;color:var(--faint);font-size:13px;}
+  .numbered-head{font-size:12px;font-weight:600;color:var(--muted);margin-top:14px;}
+  .numbered-note{font-size:12px;color:var(--faint);margin-top:4px;}
+  .divider{height:1px;background:var(--line);margin:18px 0;}
+  details{margin-top:8px;} summary{cursor:pointer;font-size:13px;color:var(--muted);}
+  details p{font-size:13px;color:var(--muted);margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Your notes — read &amp; edit</h1>
+  <div class="sub">Everything happens in this page, on your device. Nothing is uploaded.</div>
+
+  <!-- STEP 1: unlock / decrypt -->
+  <div class="card">
+    <h2><span class="step">1</span>Read what's already in there (optional)</h2>
+    <div class="hint">Paste your encrypted blob and type your secret time to load it into the editor.
+      Skip this if you're starting fresh or already have the readable list.</div>
+    <label>Encrypted blob — the <code>{ "v":1, "salt":… }</code> object, or a whole
+      <code>ENCRYPTED_CONFIG = {…};</code> line, or the contents of <code>reasons.enc.json</code></label>
+    <textarea id="blob" rows="4" placeholder='{"v":1,"salt":"…","iv":"…","ct":"…"}'></textarea>
+    <label>Secret time (the key)</label>
+    <div class="row">
+      <div><input id="unlockTime" placeholder="17:10" inputmode="numeric" /></div>
+      <div style="flex:2"><button class="btn" id="unlockBtn">Unlock to edit</button></div>
+    </div>
+    <div class="msg" id="unlockMsg"></div>
+  </div>
+
+  <!-- STEP 2: edit -->
+  <div class="card">
+    <h2><span class="step">2</span>The messages</h2>
+    <div class="hint">One message per line, in day order. The app shows one per day and loops back to the
+      first after the last. Blank lines are ignored.</div>
+    <textarea id="reasons" rows="10" placeholder="Because the day feels lighter the moment I remember you exist.
+Because you turn the most ordinary Tuesday into somewhere I want to be.
+…"></textarea>
+    <div class="count" id="reasonCount">0 messages</div>
+
+    <div class="numbered-head">Numbered list (for your reference)</div>
+    <div class="numbered-note">These numbers are just so you can say "show no. 34 today." They are never
+      stored and never shown on the hidden page. You can also type your own numbers in the box
+      above (like <code>1. …</code>) — they'll be stripped automatically when you encrypt.</div>
+    <div class="numbered" id="numbered"></div>
+
+    <div class="divider"></div>
+    <div class="row">
+      <div>
+        <label>Secret time (HH:MM) — this becomes the unlock key</label>
+        <input id="secretTime" placeholder="17:10" inputmode="numeric" />
+      </div>
+      <div>
+        <label>Start date — which day is message #1</label>
+        <input id="startDate" type="date" />
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Reveal seconds</label>
+        <input id="revealSeconds" type="number" min="3" max="120" placeholder="20" />
+      </div>
+      <div>
+        <label>Music URL (optional)</label>
+        <input id="musicUrl" placeholder="song.mp3 or a direct https mp3 link" />
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: encrypt -->
+  <div class="card">
+    <h2><span class="step">3</span>Encrypt</h2>
+    <div class="hint">Locks the messages with your secret time. Then use the result one of two ways below.</div>
+    <button class="btn accent" id="encryptBtn">Encrypt</button>
+    <div class="msg" id="encMsg"></div>
+
+    <div class="out" id="out" style="display:none">
+      <label>A) Paste this whole line into <code>index.html</code>, replacing the existing
+        <code>const ENCRYPTED_CONFIG = …;</code> line</label>
+      <textarea id="configLine" rows="4" readonly></textarea>
+      <div class="btns">
+        <button class="btn ghost" id="copyBtn">Copy line</button>
+        <button class="btn ghost" id="downloadBtn">B) Download reasons.enc.json</button>
+      </div>
+      <details>
+        <summary>What's the difference between A and B?</summary>
+        <p><b>A</b> bakes the notes straight into the page — simplest, re-host after pasting.
+        <b>B</b> gives you the encrypted file to host separately (the GitHub method): set
+        <code>CONFIG_URL</code> in <code>index.html</code> to its Raw link once, then you only
+        overwrite this file to update — no re-hosting. Either way the file is encrypted; keep your
+        plain <code>reasons.json</code> private.</p>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id)=>document.getElementById(id);
+
+/* ---- crypto: identical scheme to index.html ---- */
+function b64d(s){ const b=atob(s.trim()); const u=new Uint8Array(b.length); for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i); return u; }
+function b64e(buf){ const a=new Uint8Array(buf); let s=""; for(let i=0;i<a.length;i++) s+=String.fromCharCode(a[i]); return btoa(s); }
+async function deriveKey(pw,salt,usages){
+  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:250000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,usages);
+}
+
+function validTime(t){ return /^([01]\d|2[0-3]):[0-5]\d$/.test(t); }
+function normTime(t){
+  t=(t||"").trim();
+  if(/^\d{3,4}$/.test(t)){ t=t.padStart(4,"0"); t=t.slice(0,2)+":"+t.slice(2); } // 1710 -> 17:10
+  return t;
+}
+function parseBlob(raw){
+  let s=(raw||"").trim();
+  const i=s.indexOf("{"), j=s.lastIndexOf("}");        // pull the object out of a full line if pasted
+  if(i>-1 && j>i) s=s.slice(i,j+1);
+  return JSON.parse(s);
+}
+
+/* ---- STEP 1: decrypt ---- */
+$("unlockBtn").onclick = async ()=>{
+  const m=$("unlockMsg"); m.className="msg"; m.textContent="Working…";
+  try{
+    const t=normTime($("unlockTime").value);
+    if(!validTime(t)) throw new Error("Enter the time as HH:MM, e.g. 17:10");
+    const enc=parseBlob($("blob").value);
+    if(!enc.salt||!enc.iv||!enc.ct) throw new Error("That doesn't look like an encrypted blob.");
+    const key=await deriveKey(t,b64d(enc.salt),["decrypt"]);
+    const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64d(enc.iv)},key,b64d(enc.ct));
+    const cfg=JSON.parse(new TextDecoder().decode(pt));
+    // fill editor
+    $("reasons").value=(cfg.reasons||[]).join("\n");
+    $("secretTime").value=t;
+    if(cfg.startDate) $("startDate").value=cfg.startDate;
+    $("revealSeconds").value=cfg.revealSeconds||20;
+    $("musicUrl").value=cfg.musicUrl||"";
+    updateCount();
+    m.className="msg ok"; m.textContent="Unlocked — "+(cfg.reasons||[]).length+" messages loaded into the editor below.";
+  }catch(e){
+    m.className="msg err";
+    m.textContent = (e && /operation-specific|decrypt/i.test(e.name||"")) ?
+      "Wrong time for this blob — it won't decrypt." : ("Couldn't unlock: "+(e.message||e));
+  }
+};
+
+/* ---- STEP 2: live count + numbered preview ---- */
+/* A leading serial the user types for their own reference ("34. ", "34) ", "34 - ")
+   is not part of the message. Strip it everywhere so it's never stored or shown. */
+function stripSerial(s){ return (s||"").replace(/^\s*\d+\s*[.)\-:]\s+/,"").trim(); }
+function linesFrom(v){ return (v||"").split("\n").map(x=>stripSerial(x)).filter(Boolean); }
+function escapeHtml(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function renderNumbered(){
+  const lines=linesFrom($("reasons").value), box=$("numbered");
+  if(!lines.length){ box.innerHTML='<div class="nempty">Your numbered messages will appear here as you type.</div>'; return; }
+  box.innerHTML=lines.map((t,i)=>
+    '<div class="nrow"><span class="nnum">'+(i+1)+'.</span><span class="ntext">'+escapeHtml(t)+'</span></div>'
+  ).join("");
+}
+function updateCount(){ $("reasonCount").textContent = linesFrom($("reasons").value).length + " messages"; renderNumbered(); }
+$("reasons").addEventListener("input", updateCount);
+renderNumbered();
+
+/* default start date = today if empty */
+(function(){ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); if(!$("startDate").value) $("startDate").value=d.toISOString().slice(0,10); })();
+
+/* ---- STEP 3: encrypt ---- */
+let lastBlob=null;
+$("encryptBtn").onclick = async ()=>{
+  const m=$("encMsg"); m.className="msg"; m.textContent="Working…";
+  try{
+    const t=normTime($("secretTime").value);
+    if(!validTime(t)) throw new Error("Set the secret time as HH:MM, e.g. 17:10");
+    const reasons=linesFrom($("reasons").value);
+    if(!reasons.length) throw new Error("Add at least one message.");
+    const cfg={
+      startDate: $("startDate").value || undefined,
+      secretTime: t,                                   // stored for readability; app ignores it
+      revealSeconds: parseInt($("revealSeconds").value,10)||20,
+      musicUrl: $("musicUrl").value.trim() || "",
+      reasons
+    };
+    const salt=crypto.getRandomValues(new Uint8Array(16));
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const key=await deriveKey(t,salt,["encrypt"]);
+    const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(JSON.stringify(cfg)));
+    const blob={v:1, salt:b64e(salt), iv:b64e(iv), ct:b64e(ct)};
+    lastBlob=blob;
+    $("configLine").value="const ENCRYPTED_CONFIG = "+JSON.stringify(blob)+";";
+    $("out").style.display="block";
+    m.className="msg ok"; m.textContent="Encrypted "+reasons.length+" messages with "+t+". Use A or B below.";
+  }catch(e){ m.className="msg err"; m.textContent="Couldn't encrypt: "+(e.message||e); }
+};
+$("copyBtn").onclick = async ()=>{
+  try{ await navigator.clipboard.writeText($("configLine").value); $("copyBtn").textContent="Copied ✓"; setTimeout(()=>$("copyBtn").textContent="Copy line",1500); }
+  catch(e){ $("configLine").select(); document.execCommand("copy"); }
+};
+$("downloadBtn").onclick = ()=>{
+  if(!lastBlob) return;
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(lastBlob)],{type:"application/json"}));
+  a.download="reasons.enc.json"; a.click(); URL.revokeObjectURL(a.href);
+};
+</script>
+</body>
+</html>
